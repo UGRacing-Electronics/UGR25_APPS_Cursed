@@ -21,13 +21,13 @@ LED fault codes:
 */ 
 
 // Pin Setup 
-I2C i2c1(p9, p10);                  //I2C pins for APPS1 (sda, scl)
-I2C i2c2(p28, p27);                 //I2C pins for APPS2 (sda, scl)
+// I2C i2c1(p9, p10);                  //I2C pins for APPS1 (sda, scl)
+// I2C i2c2(p28, p27);                 //I2C pins for APPS2 (sda, scl)
 CAN can(p30, p29, 500000);          //CAN pins for transceiver (Rx, Tx, frequency Hz)
 DigitalOut SDC(p8);                 //Output to the shutdown circuit
-DigitalIn RtD(p21);                 //Ready to drive signal
+// DigitalIn RtD(p21);                 //Ready to drive signal
 BusOut leds(LED4,LED3,LED2,LED1);   //Bus to display errors: code of signals below
-BufferedSerial pc(p13, p14);        //UART debugging port, use external UART TTL USB adapter
+// BufferedSerial pc(p13, p14);        //UART debugging port, use external UART TTL USB adapter
 
 unsigned long canTimestamp;
 
@@ -52,23 +52,6 @@ enum ErrorCode {
 
 /* Functions */
 
-// CAN
-
-CANMessage rcv;
-
-bool checkTSCAN() {
-    if (us_ticker_read() - canTimestamp > 100000) {
-        if (!can.read(rcv)) {
-            if(rcv.id==0x100) {
-                openShutdownCircuit(TEMP_ERROR);
-                return 0;
-            }
-        }
-    }
-    return 1;
-}
-
-
 // Shutdown Circuit
 
 void openShutdownCircuit(int error_led) {
@@ -81,27 +64,47 @@ void closeShutdownCircuit(int error_led = NO_ERROR) {
     leds = error_led;
 }
 
+// CAN
+
+CANMessage rcv;
+
+bool checkTSCAN() {
+    if (us_ticker_read() - canTimestamp > 100000) {
+        if (!can.read(rcv)) {
+            openShutdownCircuit(TEMP_ERROR);
+            return 0;
+        } else {
+            canTimestamp = us_ticker_read();
+        }
+    }
+    return 1;
+}
+
+
+
 /* Loops */
 
-int setup() {
+void setup() {
     can.mode(CAN::Normal);              //sets the CAN controller to operate in normal mode
-    can.attach(&isrCanRx, CAN::RxIrq);
 
     can.filter(0x100, 0x7FF, CANStandard, 0);
-    canThread.start(callback(&queue, &EventQueue::dispatch_forever));
 
-    canTimestamp = us_ticker_read();  
+    canTimestamp = us_ticker_read(); //This line is the problem
 
     closeShutdownCircuit();
+
+    // wait_us(500000);
 }
 
 int main() {
+    // SDC = 1;
     setup();
-
+    wait_us(50000000);
     while (1) {
-        if (checkTSCAN()) {
-            // APPS logic
-        } 
+        // if (checkTSCAN()) {
+        //     // APPS logic
+        // } 
         wait_us(500);
     }
+    return 1;
 }
