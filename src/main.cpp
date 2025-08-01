@@ -29,6 +29,8 @@ DigitalIn RtD(p21);                 //Ready to drive signal
 BusOut leds(LED4,LED3,LED2,LED1);   //Bus to display errors: code of signals below
 BufferedSerial pc(p13, p14);        //UART debugging port, use external UART TTL USB adapter
 
+unsigned long canTimestamp;
+
 // Error code enum
 
 enum ErrorCode {
@@ -54,13 +56,18 @@ enum ErrorCode {
 
 CANMessage rcv;
 
-int checkTSCAN() {
-    if (can.read(rcv)) {
-        if(rcv.id==0x100) {
-            openShutdownCircuit(TEMP_ERROR);
+bool checkTSCAN() {
+    if (us_ticker_read() - canTimestamp > 100000) {
+        if (!can.read(rcv)) {
+            if(rcv.id==0x100) {
+                openShutdownCircuit(TEMP_ERROR);
+                return 0;
+            }
         }
     }
+    return 1;
 }
+
 
 // Shutdown Circuit
 
@@ -77,9 +84,24 @@ void closeShutdownCircuit(int error_led = NO_ERROR) {
 /* Loops */
 
 int setup() {
-    closeShutdownCircuit;
+    can.mode(CAN::Normal);              //sets the CAN controller to operate in normal mode
+    can.attach(&isrCanRx, CAN::RxIrq);
+
+    can.filter(0x100, 0x7FF, CANStandard, 0);
+    canThread.start(callback(&queue, &EventQueue::dispatch_forever));
+
+    canTimestamp = us_ticker_read();  
+
+    closeShutdownCircuit();
 }
 
 int main() {
+    setup();
 
+    while (1) {
+        if (checkTSCAN()) {
+            // APPS logic
+        } 
+        wait_us(500);
+    }
 }
