@@ -29,7 +29,7 @@ DigitalOut SDC(p8);                 //Output to the shutdown circuit
 BusOut leds(LED4,LED3,LED2,LED1);   //Bus to display errors: code of signals below
 // BufferedSerial pc(p13, p14);        //UART debugging port, use external UART TTL USB adapter
 
-unsigned long canTimestamp;
+uint32_t canTimestamp;
 
 // Error code enum
 
@@ -80,31 +80,32 @@ bool checkTSCAN() {
     return 1;
 }
 
-
-
 /* Loops */
 
 void setup() {
-    can.mode(CAN::Normal);              //sets the CAN controller to operate in normal mode
+    can.mode(CAN::Normal); //sets the CAN controller to operate in normal mode
+    can.filter(0x100, 0x7FF, CANStandard, 0); // Filter only messages with id 0x100
 
-    can.filter(0x100, 0x7FF, CANStandard, 0);
-
-    canTimestamp = us_ticker_read(); //This line is the problem
+    wait_us(500); // This MUST preceed the us_ticker_read() or the code will hang.
+    canTimestamp = us_ticker_read(); 
 
     closeShutdownCircuit();
-
-    // wait_us(500000);
 }
 
 int main() {
-    // SDC = 1;
     setup();
-    wait_us(50000000);
+    wait_us(500000);
     while (1) {
-        // if (checkTSCAN()) {
-        //     // APPS logic
-        // } 
-        wait_us(500);
+        if (checkTSCAN()) {
+            // APPS logic
+        } 
+
+        /* Mock logic, use this when testing CAN SDC functionality. */
+        // openShutdownCircuit(TEMP_ERROR);
+        // wait_us(500000);
+        // closeShutdownCircuit(VALUE_OUT_OF_RANGE);
+        // wait_us(500000);
+
     }
     return 1;
 }
